@@ -134,9 +134,11 @@ func (c *CloudflareProvider) makeRequest(ctx context.Context, method, endpoint s
 	return &cfResp, nil
 }
 
-// recordsPerPage is the page size requested from Cloudflare. The API caps
-// pages at 20 unless per_page is raised, and a zone can hold far more records
-// than that, so every page has to be walked.
+// recordsPerPage is the page size requested from Cloudflare. The listing is
+// paginated — 100 records per page by default for this endpoint — and a zone
+// can hold far more than one page, so every page has to be walked. The live
+// hollebone.ca zone returns 403 records; an unpaginated call saw only the
+// first 100.
 const recordsPerPage = 100
 
 func (c *CloudflareProvider) ListRecords(ctx context.Context, zone string) ([]DNSRecord, error) {
