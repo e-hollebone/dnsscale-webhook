@@ -159,7 +159,7 @@ func TestGenerateExampleConfig(t *testing.T) {
 		"tskey-webhook-EXAMPLE",
 		"0000000000000000000000000000000000000000",
 		"100.64.1.250",
-		"domain-PLACEHOLDER",
+		"canary.invalid",
 	} {
 		if strings.Contains(body, secret) {
 			t.Errorf("generated config contains a real internal value: %s", secret)
