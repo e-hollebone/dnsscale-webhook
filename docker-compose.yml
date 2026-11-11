@@ -1,0 +1,77 @@
+# DNSScale — Docker container
+# Tailscale → Cloudflare DNS sync (fork of jaxxstorm/dnsscale, Go)
+#
+# Secrets come from .env (gitignored). Never commit .env.
+#
+# Tailscale: the container joins the tailnet via TS_AUTHKEY so the webhook
+# receiver is reachable over the tailnet.
+#
+# Webhook: registered in the Tailscale admin console, e.g.
+#   https://dnsscale.example.com/api/v1/webhook
+# TLS: api.tls_mode selects off (plain HTTP), provided (mounted certificate),
+# or tailscale (certificate requested from the tailnet by the entrypoint).
+# The webhook receiver requires HTTPS on port 80 or 443.
+# The webhook is a fast-path nudge only; periodic reconcile stays authoritative.
+
+services:
+  dnsscale:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dnsscale
+    restart: unless-stopped
+
+    # Environment from .env file (gitignored)
+    env_file:
+      - .env
+
+    volumes:
+      # Config file, read-only
+      - /opt/dnsscale/dnsscale.yaml:/etc/dnsscale/dnsscale.yaml:ro
+      # Tailscale state, persisted across restarts. Also holds the
+      # tailnet-issued certificate when api.tls_mode is "tailscale".
+      - dnsscale-ts-var-lib:/var/lib/tailscale
+      - dnsscale-ts-run:/run/tailscale
+      # For api.tls_mode "provided", mount your certificate instead, e.g.:
+      # - /etc/letsencrypt/live/dnsscale.example.com/fullchain.pem:/certs/cert.pem:ro
+      # - /etc/letsencrypt/live/dnsscale.example.com/privkey.pem:/certs/key.pem:ro
+
+    # No ports published by default: the container gets a Tailscale IP and the
+    # webhook is reached over the tailnet. To use a public hostname instead,
+    # publish 443 (and point the webhook URL at it):
+    # ports:
+    #   - "443:443"
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+    # Healthcheck: the API answers on HTTPS (tls_mode provided/tailscale,
+    # bind :443) or plain HTTP (tls_mode off, bind :8080). Both are tried;
+    # certificate verification is skipped because a tailnet-issued
+    # certificate is not signed by a public CA.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 --no-check-certificate -O /dev/null https://localhost:443/health || wget -q --tries=1 -O /dev/null http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Logging: json-file driver, rotated. Structured JSON when
+    # logging.format is "json"; console format otherwise.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Labels for watchtower (if used on this host)
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+volumes:
+  dnsscale-ts-var-lib:
+  dnsscale-ts-run:
