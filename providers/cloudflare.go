@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
@@ -133,30 +134,48 @@ func (c *CloudflareProvider) makeRequest(ctx context.Context, method, endpoint s
 	return &cfResp, nil
 }
 
+// recordsPerPage is the page size requested from Cloudflare. The API caps
+// pages at 20 unless per_page is raised, and a zone can hold far more records
+// than that, so every page has to be walked.
+const recordsPerPage = 100
+
 func (c *CloudflareProvider) ListRecords(ctx context.Context, zone string) ([]DNSRecord, error) {
-	endpoint := fmt.Sprintf("/zones/%s/dns_records", c.zoneID)
-
-	resp, err := c.makeRequest(ctx, "GET", endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var records []CloudflareRecord
-	if err := json.Unmarshal(resp.Result, &records); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal DNS records: %w", err)
-	}
-
-	// Convert to our internal format
 	var dnsRecords []DNSRecord
-	for _, record := range records {
-		// Include A, AAAA, and TXT records
-		if record.Type == "A" || record.Type == "AAAA" || record.Type == "TXT" {
-			dnsRecords = append(dnsRecords, DNSRecord{
-				Name:  record.Name,
-				Type:  record.Type,
-				Value: record.Content,
-				TTL:   int64(record.TTL),
-			})
+
+	for page := 1; page <= 100; page++ {
+		endpoint := fmt.Sprintf("/zones/%s/dns_records?page=%d&per_page=%d", c.zoneID, page, recordsPerPage)
+
+		resp, err := c.makeRequest(ctx, "GET", endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var records []CloudflareRecord
+		if err := json.Unmarshal(resp.Result, &records); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal DNS records: %w", err)
+		}
+
+		// Convert to our internal format
+		for _, record := range records {
+			// Include A, AAAA, and TXT records
+			if record.Type == "A" || record.Type == "AAAA" || record.Type == "TXT" {
+				dnsRecords = append(dnsRecords, DNSRecord{
+					Name:  record.Name,
+					Type:  record.Type,
+					Value: record.Content,
+					TTL:   int64(record.TTL),
+				})
+			}
+		}
+
+		// Stop when the API reports the last page, or when a page comes back
+		// short and result_info is unavailable.
+		if resp.ResultInfo != nil && resp.ResultInfo.TotalPages > 0 {
+			if page >= resp.ResultInfo.TotalPages {
+				break
+			}
+		} else if len(records) < recordsPerPage {
+			break
 		}
 	}
 
@@ -182,44 +201,37 @@ func (c *CloudflareProvider) CreateRecord(ctx context.Context, zone string, reco
 }
 
 func (c *CloudflareProvider) UpdateRecord(ctx context.Context, zone string, record DNSRecord) error {
-	// First, find the existing record
-	existingRecords, err := c.ListRecords(ctx, zone)
+	// Look the record up by name and type. Scanning the whole zone is both
+	// wasteful and unsafe: the listing is paginated, so a scan that stops at
+	// the first page makes every later record look missing and sends the
+	// reconciler down the create path.
+	endpoint := fmt.Sprintf("/zones/%s/dns_records?name=%s&type=%s",
+		c.zoneID, url.QueryEscape(record.Name), record.Type)
+
+	resp, err := c.makeRequest(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list existing records: %w", err)
+		return err
 	}
 
-	var recordID string
-	var found bool
-	for _, existing := range existingRecords {
-		if existing.Name == record.Name && existing.Type == record.Type {
-			// We need to get the actual Cloudflare record ID
-			// Let's get it via the API
-			endpoint := fmt.Sprintf("/zones/%s/dns_records?name=%s&type=%s", c.zoneID, record.Name, record.Type)
-			resp, err := c.makeRequest(ctx, "GET", endpoint, nil)
-			if err != nil {
-				return err
-			}
-
-			var records []CloudflareRecord
-			if err := json.Unmarshal(resp.Result, &records); err != nil {
-				return fmt.Errorf("failed to unmarshal DNS records: %w", err)
-			}
-
-			if len(records) > 0 {
-				recordID = records[0].ID
-				found = true
-				break
-			}
-		}
+	var records []CloudflareRecord
+	if err := json.Unmarshal(resp.Result, &records); err != nil {
+		return fmt.Errorf("failed to unmarshal DNS records: %w", err)
 	}
 
-	if !found {
+	if len(records) == 0 {
 		// Record doesn't exist, create it
 		return c.CreateRecord(ctx, zone, record)
 	}
 
-	// Update the existing record
-	endpoint := fmt.Sprintf("/zones/%s/dns_records/%s", c.zoneID, recordID)
+	existing := records[0]
+	if existing.Content == record.Value {
+		// Already correct. Cloudflare answers a PUT that would change nothing
+		// with 81058 "An identical record already exists", which the
+		// reconciler would otherwise log as a failure on every poll.
+		return nil
+	}
+
+	updateEndpoint := fmt.Sprintf("/zones/%s/dns_records/%s", c.zoneID, existing.ID)
 
 	cfRecord := CloudflareRecord{
 		Name:    record.Name,
@@ -232,7 +244,7 @@ func (c *CloudflareProvider) UpdateRecord(ctx context.Context, zone string, reco
 	proxied := false
 	cfRecord.Proxied = &proxied
 
-	_, err = c.makeRequest(ctx, "PUT", endpoint, cfRecord)
+	_, err = c.makeRequest(ctx, "PUT", updateEndpoint, cfRecord)
 	return err
 }
 

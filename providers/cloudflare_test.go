@@ -346,3 +346,94 @@ func TestCloudflareUsesRequestContext(t *testing.T) {
 		t.Fatal("ListRecords() = nil with a cancelled context, want an error")
 	}
 }
+
+func cloudflareOKPaged(result []map[string]interface{}, page, totalPages int) string {
+	body, _ := json.Marshal(map[string]interface{}{
+		"success":  true,
+		"errors":   []interface{}{},
+		"messages": []interface{}{},
+		"result":   result,
+		"result_info": map[string]interface{}{
+			"page":        page,
+			"per_page":    100,
+			"count":       len(result),
+			"total_count": len(result) * totalPages,
+			"total_pages": totalPages,
+		},
+	})
+	return string(body)
+}
+
+// TestCloudflareListRecordsPaginates pins the behaviour that broke the live
+// zone: Cloudflare returns 20 records per page unless per_page is raised, and
+// the zone holds 100. A single unpaginated call left every record past page 1
+// invisible, so the reconciler tried to create records that already existed.
+func TestCloudflareListRecordsPaginates(t *testing.T) {
+	var seenPages []string
+
+	p := newTestCloudflare(t, func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		seenPages = append(seenPages, page)
+		switch page {
+		case "1":
+			fmt.Fprint(w, cloudflareOKPaged([]map[string]interface{}{
+				{"id": "p1", "name": "one.example.com", "type": "A", "content": "100.64.1.1", "ttl": 300},
+			}, 1, 2))
+		case "2":
+			fmt.Fprint(w, cloudflareOKPaged([]map[string]interface{}{
+				{"id": "p2", "name": "two.example.com", "type": "A", "content": "100.64.1.2", "ttl": 300},
+			}, 2, 2))
+		default:
+			t.Errorf("unexpected page requested: %q", page)
+			fmt.Fprint(w, cloudflareOK([]map[string]interface{}{}))
+		}
+	})
+
+	records, err := p.ListRecords(context.Background(), "example.com")
+	if err != nil {
+		t.Fatalf("ListRecords() = %v", err)
+	}
+
+	if len(seenPages) != 2 || seenPages[0] != "1" || seenPages[1] != "2" {
+		t.Errorf("pages requested = %v, want [1 2]", seenPages)
+	}
+	if len(records) != 2 {
+		t.Fatalf("records = %d, want one from each page: %+v", len(records), records)
+	}
+	if records[1].Name != "two.example.com" {
+		t.Errorf("second page record = %+v, want two.example.com", records[1])
+	}
+}
+
+// TestCloudflareUpdateRecordSkipsIdenticalRecord pins the no-op guard: an
+// unchanged record must not be PUT, because Cloudflare answers such a PUT with
+// 81058 "An identical record already exists" and the reconciler logged that as
+// a failure on every poll.
+func TestCloudflareUpdateRecordSkipsIdenticalRecord(t *testing.T) {
+	var putSeen bool
+
+	p := newTestCloudflare(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			fmt.Fprint(w, cloudflareOK([]map[string]interface{}{
+				{"id": "r1", "name": "web.example.com", "type": "A", "content": "100.64.1.1", "ttl": 300},
+			}))
+		case http.MethodPut:
+			putSeen = true
+			fmt.Fprint(w, cloudflareOK(map[string]interface{}{"id": "r1"}))
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			fmt.Fprint(w, cloudflareOK(map[string]interface{}{}))
+		}
+	})
+
+	err := p.UpdateRecord(context.Background(), "example.com", DNSRecord{
+		Name: "web.example.com", Type: "A", Value: "100.64.1.1", TTL: 300,
+	})
+	if err != nil {
+		t.Fatalf("UpdateRecord() = %v", err)
+	}
+	if putSeen {
+		t.Error("UpdateRecord() issued a PUT for a record that was already correct")
+	}
+}
