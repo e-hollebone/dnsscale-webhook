@@ -1,0 +1,61 @@
+# DNSScale Configuration File for example.ts.net tailnet and example.com domain
+
+tailscale:
+  # Tailscale API key - get this from https://login.tailscale.com/admin/settings/keys
+  api_key: "YOUR_TAILSCALE_API_KEY_HERE"
+  # Your tailnet name
+  tailnet: "example.ts.net"
+
+dns:
+  # DNS provider: cloudflare
+  provider: "cloudflare"
+  # The domain to manage DNS records for
+  domain: "example.com"
+  # The zone ID from Cloudflare (get from the domain overview page)
+  zone_id: "YOUR_CLOUDFLARE_ZONE_ID_HERE"
+  
+  # Cloudflare-specific configuration
+  cloudflare:
+    # Get this from https://dash.cloudflare.com/profile/api-tokens
+    # Create a token with Zone:Read, DNS:Edit permissions for example.com zone
+    api_token: "YOUR_CLOUDFLARE_API_TOKEN_HERE"
+
+app:
+  # Number of worker goroutines for processing DNS updates
+  workers: 2
+  # How often to poll Tailscale API for changes
+  poll_interval: "30s"
+  # Only manage nodes with these tags (optional)
+  # If empty, all nodes will be managed
+  # required_tags:
+  #   - "tag:production"
+  #   - "tag:webserver"
+
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+  # Log format: json or console
+  format: "console"
+
+api:
+  # Enable the self-describing HTTP API (human dashboard + agent discovery)
+  enabled: true
+  # Listen address. Use :443 when the Tailscale webhook receiver is enabled.
+  bind_addr: ":8080"
+  # TLS mode:
+  #   off       - plain HTTP, no certificate (default; start without TLS)
+  #   provided  - HTTPS using the certificate at tls_cert / tls_key
+  #   tailscale - HTTPS using a certificate issued by the tailnet
+  # Tailscale delivers webhooks only to HTTPS on port 80 or 443.
+  tls_mode: "off"
+  # tls_cert: "/etc/letsencrypt/live/dnsscale.example.com/fullchain.pem"
+  # tls_key:  "/etc/letsencrypt/live/dnsscale.example.com/privkey.pem"
+
+webhook:
+  # Tailscale webhook receiver (fast-path only; the poll stays authoritative)
+  enabled: false
+  # HMAC secret for Tailscale-Webhook-Signature verification.
+  # Prefer the WEBHOOK_SECRET environment variable over this file.
+  secret: ""
+  # Path must be reachable over HTTPS on port 80 or 443 to receive events
+  path: "/api/v1/webhook"
