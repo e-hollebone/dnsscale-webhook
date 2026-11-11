@@ -365,9 +365,10 @@ func cloudflareOKPaged(result []map[string]interface{}, page, totalPages int) st
 }
 
 // TestCloudflareListRecordsPaginates pins the behaviour that broke the live
-// zone: Cloudflare returns 20 records per page unless per_page is raised, and
-// the zone holds 100. A single unpaginated call left every record past page 1
-// invisible, so the reconciler tried to create records that already existed.
+// zone: Cloudflare pages the listing at 100 records per page and the zone
+// holds 403. A single unpaginated call saw only the first 100, leaving every
+// later record invisible, so the reconciler tried to create records that
+// already existed.
 func TestCloudflareListRecordsPaginates(t *testing.T) {
 	var seenPages []string
 
