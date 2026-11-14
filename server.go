@@ -31,8 +31,7 @@ import (
 )
 
 const (
-	serviceName    = "dnsscale"
-	serviceVersion = "1.0.0"
+	serviceName = "dnsscale"
 
 	// webhookSignatureScheme is the only signature scheme Tailscale publishes.
 	webhookSignatureScheme = "v1"
@@ -40,6 +39,11 @@ const (
 	// Tailscale's own documentation recommends rejecting events older than 5 minutes.
 	webhookMaxAge = 5 * time.Minute
 )
+
+// serviceVersion is overridden at build time:
+//
+//	go build -ldflags "-X main.serviceVersion=0.1.0"
+var serviceVersion = "dev"
 
 // endpoint describes one operation. It is the single source for the JSON index,
 // the discovery document and the HTML page.
@@ -66,7 +70,7 @@ var endpoints = []endpoint{
 		Method:      "GET",
 		Path:        "/api/v1/status",
 		Description: "Reconciler status: uptime, sync counters, poll interval, tag filters",
-		Example:     `{"service":"dnsscale","version":"1.0.0","dns_provider":"cloudflare","dns_domain":"example.com","poll_interval":"30s","workers":2,"sync":{"sync_count":42,"last_sync_at":"2026-11-10T12:00:00Z","uptime":"2h 14m"},"nodes":{"count":80}}`,
+		Example:     `{"service":"dnsscale","version":"0.1.0","dns_provider":"cloudflare","dns_domain":"example.com","poll_interval":"30s","workers":2,"sync":{"sync_count":42,"last_sync_at":"2026-11-10T12:00:00Z","uptime":"2h 14m"},"nodes":{"count":80}}`,
 	},
 	{
 		Name:        "config",

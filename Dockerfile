@@ -15,7 +15,8 @@ RUN go mod download
 COPY . ./
 
 # Build dnsscale binary
-RUN CGO_ENABLED=0 go build -o /dnsscale .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -ldflags "-X main.serviceVersion=${VERSION}" -o /dnsscale .
 
 # ---- runtime stage ----
 FROM alpine:3.20
