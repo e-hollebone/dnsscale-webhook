@@ -109,7 +109,7 @@ it adds, updates and removes DNS records for every authorized Tailscale node.</p
 
 <p class="footer">
 Service: <code>dnsscale</code> &nbsp;|&nbsp; Version: <code>` + serviceVersion + `</code>
-&nbsp;|&nbsp; <a href="https://github.com/e-hollebone/dnsscale-with-webhook">Upstream</a>
+&nbsp;|&nbsp; <a href="https://github.com/e-hollebone/dnsscale-webhook">Upstream</a>
 &nbsp;|&nbsp; <a href="README.md">README</a> &middot; <a href="design.md">design</a>
 </p>
 
@@ -195,7 +195,7 @@ func dashboardAttributes() [][2]string {
 	return [][2]string{
 		{"Service", "dnsscale"},
 		{"Version", serviceVersion},
-		{"Source", "github.com/e-hollebone/dnsscale-with-webhook"},
+		{"Source", "github.com/e-hollebone/dnsscale-webhook"},
 		{"DNS providers", "cloudflare, route53, pihole"},
 		{"Record types", "A, AAAA, TXT (ownership)"},
 		{"Poll model", "constant daemon; change detected -> reconcile immediately"},

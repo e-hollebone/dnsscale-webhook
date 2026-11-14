@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/e-hollebone/dnsscale-with-webhook/providers"
+	"github.com/e-hollebone/dnsscale-webhook/providers"
 	"go.uber.org/zap"
 )
 
@@ -249,7 +249,7 @@ func (s *Server) handleAPIRoot(w http.ResponseWriter, r *http.Request) {
 		"docs": map[string]string{
 			"readme":   "README.md",
 			"design":   "design.md",
-			"upstream": "https://github.com/e-hollebone/dnsscale-with-webhook",
+			"upstream": "https://github.com/e-hollebone/dnsscale-webhook",
 		},
 		"code": map[string]string{
 			"main":   "main.go",
@@ -274,7 +274,7 @@ func (s *Server) handleEndpoints(w http.ResponseWriter, r *http.Request) {
 		"docs": map[string]string{
 			"readme":   "README.md",
 			"design":   "design.md",
-			"upstream": "https://github.com/e-hollebone/dnsscale-with-webhook",
+			"upstream": "https://github.com/e-hollebone/dnsscale-webhook",
 		},
 		"_links": map[string]string{
 			"self":       "/api/v1/endpoints",

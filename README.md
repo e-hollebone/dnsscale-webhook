@@ -34,8 +34,8 @@ This repository is a fork of [jaxxstorm/dnsscale](https://github.com/jaxxstorm/d
 ### From Source
 
 ```bash
-git clone https://github.com/e-hollebone/dnsscale-with-webhook
-cd dnsscale-with-webhook
+git clone https://github.com/e-hollebone/dnsscale-webhook
+cd dnsscale-webhook
 go build .
 ```
 

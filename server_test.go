@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/e-hollebone/dnsscale-with-webhook/providers"
+	"github.com/e-hollebone/dnsscale-webhook/providers"
 	"go.uber.org/zap"
 )
 

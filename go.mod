@@ -1,4 +1,4 @@
-module github.com/e-hollebone/dnsscale-with-webhook
+module github.com/e-hollebone/dnsscale-webhook
 
 go 1.24.7
 
